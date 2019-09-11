@@ -2,13 +2,18 @@ package main
 
 import (
 	"flag"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
+
+	"github.com/alecthomas/chroma/quick"
 )
 
 var (
@@ -27,7 +32,7 @@ func main() {
 	if disableCache {
 		fs = noCache(fs)
 	}
-	http.Handle("/", fs)
+	http.Handle("/", highlight(fs))
 
 	errCh := make(chan error)
 	go func() {
@@ -83,6 +88,50 @@ func noCache(h http.Handler) http.Handler {
 			w.Header().Set(k, v)
 		}
 		h.ServeHTTP(w, r)
+	}
+	return http.HandlerFunc(fn)
+}
+
+func highlight(h http.Handler) http.Handler {
+	skipSuffixes := []string{"html", "css", "js"}
+	fn := func(w http.ResponseWriter, r *http.Request) {
+		for _, suffix := range skipSuffixes {
+			if strings.HasSuffix(r.RequestURI, suffix) {
+				h.ServeHTTP(w, r)
+				return
+			}
+		}
+
+		fp := filepath.Join(dir, r.RequestURI)
+		file, err := os.Open(fp)
+		if err != nil {
+			log.Printf("fail to open - %s: %v", fp, err)
+			h.ServeHTTP(w, r)
+			return
+		}
+		stat, err := file.Stat()
+		if err != nil {
+			log.Printf("fail to stat - %s: %v", fp, err)
+			h.ServeHTTP(w, r)
+			return
+		}
+		if stat.IsDir() {
+			h.ServeHTTP(w, r)
+			return
+		}
+
+		bs, err := ioutil.ReadAll(file)
+		if err != nil {
+			log.Printf("fail to read - %s: %v", fp, err)
+			h.ServeHTTP(w, r)
+			return
+		}
+
+		err = quick.Highlight(w, string(bs), "", "html", "monokai")
+		if err != nil {
+			log.Printf("fail to highlight - %s: %v", fp, err)
+			h.ServeHTTP(w, r)
+		}
 	}
 	return http.HandlerFunc(fn)
 }
