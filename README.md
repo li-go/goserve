@@ -16,6 +16,8 @@ Usage of goserve:
         directory to host (default ".")
   -disable-cache
         disable http cache
+  -disable-highlight
+        disable code highlight
   -port int
         port to host (default 3000)
 ```

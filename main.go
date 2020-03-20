@@ -17,22 +17,28 @@ import (
 )
 
 var (
-	port         int
-	dir          string
-	disableCache bool
+	port             int
+	dir              string
+	disableCache     bool
+	disableHighlight bool
 )
 
 func main() {
 	flag.IntVar(&port, "port", 3000, "port to host")
 	flag.StringVar(&dir, "dir", ".", "directory to host")
 	flag.BoolVar(&disableCache, "disable-cache", false, "disable http cache")
+	flag.BoolVar(&disableHighlight, "disable-highlight", false, "disable code highlight")
 	flag.Parse()
 
 	fs := http.FileServer(http.Dir(dir))
 	if disableCache {
 		fs = noCache(fs)
 	}
-	http.Handle("/", highlight(fs))
+	if disableHighlight {
+		http.Handle("/", fs)
+	} else {
+		http.Handle("/", highlight(fs))
+	}
 
 	errCh := make(chan error)
 	go func() {
